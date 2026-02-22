@@ -3,6 +3,7 @@ import sympy as sp
 import numpy as np
 import plotly.graph_objects as go
 from fpdf import FPDF
+import textwrap
 
 # --- Page Config ---
 st.set_page_config(page_title="Integral Master Pro", page_icon="∫", layout="wide")
@@ -13,24 +14,30 @@ def create_pdf(func_str, lower, upper, indefinite, f_b, f_a, result):
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
     
-    # Modern fpdf2 syntax for line breaks
     pdf.cell(0, 10, txt="Integral Calculation Report", new_x="LMARGIN", new_y="NEXT", align='C')
     
     pdf.set_font("Arial", size=12)
-    pdf.cell(0, 10, txt="", new_x="LMARGIN", new_y="NEXT") # Blank line
+    pdf.cell(0, 10, txt="", new_x="LMARGIN", new_y="NEXT") 
     pdf.cell(0, 10, txt=f"Function: f(x) = {func_str}", new_x="LMARGIN", new_y="NEXT")
     pdf.cell(0, 10, txt=f"Bounds: From {lower} to {upper}", new_x="LMARGIN", new_y="NEXT")
     
-    pdf.cell(0, 10, txt="", new_x="LMARGIN", new_y="NEXT") # Blank line
+    pdf.cell(0, 10, txt="", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Arial", "B", 14)
     pdf.cell(0, 10, txt="Step-by-Step Solution:", new_x="LMARGIN", new_y="NEXT")
     
     pdf.set_font("Arial", size=12)
     
-    # FIX: Add spaces around operators so FPDF can word-wrap long math strings!
-    indef_str = str(indefinite).replace('**', '^').replace('+', ' + ').replace('-', ' - ').replace('*', ' * ')
+    # BULLETPROOF FIX: Force line breaks on long math strings using textwrap
+    indef_str = str(indefinite).replace('**', '^')
+    wrapper = textwrap.TextWrapper(width=65, break_long_words=True)
+    safe_indef_str = wrapper.fill(indef_str)
     
-    pdf.multi_cell(0, 10, txt=f"1. Find the anti-derivative F(x):\n    F(x) = {indef_str}")
+    pdf.multi_cell(0, 10, txt="1. Find the anti-derivative F(x):")
+    
+    # Print the wrapped math string line by line
+    for line in safe_indef_str.split('\n'):
+        pdf.multi_cell(0, 10, txt=f"    F(x) = {line}")
+        
     pdf.multi_cell(0, 10, txt="2. Apply Fundamental Theorem of Calculus: F(b) - F(a)")
     
     fb_val = float(sp.re(f_b))
@@ -73,14 +80,17 @@ try:
     with col2:
         st.subheader("📝 Step-by-Step")
         st.latex(rf"F(x) = \int {sp.latex(f_expr)} dx")
-        st.latex(rf"= {sp.latex(indefinite_integral)}")
+        
+        # Display the indefinite integral safely in the UI expander since it can be long
+        with st.expander("Show Anti-derivative F(x)"):
+            st.latex(sp.latex(indefinite_integral))
         
         st.write("**Evaluate at bounds:**")
         st.latex(rf"F({upper_bound}) = {float(sp.re(f_b)):.4f}")
         st.latex(rf"F({lower_bound}) = {float(sp.re(f_a)):.4f}")
         st.success(f"**Final Result:** {numerical_value:.5f}")
 
-        # PDF Download - Wrapped in its own try/except so it doesn't crash the graph if it fails
+        # PDF Download
         try:
             pdf_data = create_pdf(func_str, lower_bound, upper_bound, indefinite_integral, f_b, f_a, numerical_value)
             st.download_button(
