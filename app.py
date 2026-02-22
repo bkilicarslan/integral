@@ -12,25 +12,27 @@ def create_pdf(func_str, lower, upper, indefinite, f_b, f_a, result):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
-    pdf.cell(200, 10, txt="Integral Calculation Report", ln=1, align='C')
+    
+    # Modern fpdf2 syntax for line breaks
+    pdf.cell(0, 10, txt="Integral Calculation Report", new_x="LMARGIN", new_y="NEXT", align='C')
     
     pdf.set_font("Arial", size=12)
-    pdf.ln(10)
-    pdf.cell(200, 10, txt=f"Function: f(x) = {func_str}", ln=1)
-    pdf.cell(200, 10, txt=f"Bounds: From {lower} to {upper}", ln=1)
+    pdf.cell(0, 10, txt="", new_x="LMARGIN", new_y="NEXT") # Blank line
+    pdf.cell(0, 10, txt=f"Function: f(x) = {func_str}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 10, txt=f"Bounds: From {lower} to {upper}", new_x="LMARGIN", new_y="NEXT")
     
-    pdf.ln(5)
+    pdf.cell(0, 10, txt="", new_x="LMARGIN", new_y="NEXT") # Blank line
     pdf.set_font("Arial", "B", 14)
-    pdf.cell(200, 10, txt="Step-by-Step Solution:", ln=1)
+    pdf.cell(0, 10, txt="Step-by-Step Solution:", new_x="LMARGIN", new_y="NEXT")
     
     pdf.set_font("Arial", size=12)
-    # Convert SymPy expression to a safe string for the PDF
-    indef_str = str(indefinite).replace('**', '^')
+    
+    # FIX: Add spaces around operators so FPDF can word-wrap long math strings!
+    indef_str = str(indefinite).replace('**', '^').replace('+', ' + ').replace('-', ' - ').replace('*', ' * ')
     
     pdf.multi_cell(0, 10, txt=f"1. Find the anti-derivative F(x):\n    F(x) = {indef_str}")
-    pdf.multi_cell(0, 10, txt=f"2. Apply Fundamental Theorem of Calculus: F(b) - F(a)")
+    pdf.multi_cell(0, 10, txt="2. Apply Fundamental Theorem of Calculus: F(b) - F(a)")
     
-    # Safely convert to float for PDF display
     fb_val = float(sp.re(f_b))
     fa_val = float(sp.re(f_a))
     
@@ -38,7 +40,6 @@ def create_pdf(func_str, lower, upper, indefinite, f_b, f_a, result):
     pdf.multi_cell(0, 10, txt=f"    F({lower}) = {fa_val:.4f}")
     pdf.multi_cell(0, 10, txt=f"3. Final Result: {fb_val:.4f} - ({fa_val:.4f}) = {result:.5f}")
     
-    # fpdf2 outputs a bytearray which Streamlit uses perfectly
     return bytes(pdf.output())
 
 # --- Main App ---
@@ -79,18 +80,20 @@ try:
         st.latex(rf"F({lower_bound}) = {float(sp.re(f_a)):.4f}")
         st.success(f"**Final Result:** {numerical_value:.5f}")
 
-        # PDF Download
-        pdf_data = create_pdf(func_str, lower_bound, upper_bound, indefinite_integral, f_b, f_a, numerical_value)
-        st.download_button(
-            label="📥 Download PDF Report",
-            data=pdf_data,
-            file_name="integral_report.pdf",
-            mime="application/pdf",
-        )
+        # PDF Download - Wrapped in its own try/except so it doesn't crash the graph if it fails
+        try:
+            pdf_data = create_pdf(func_str, lower_bound, upper_bound, indefinite_integral, f_b, f_a, numerical_value)
+            st.download_button(
+                label="📥 Download PDF Report",
+                data=pdf_data,
+                file_name="integral_report.pdf",
+                mime="application/pdf",
+            )
+        except Exception as pdf_error:
+            st.error(f"PDF Generation Failed: {pdf_error}")
 
     with col1:
         st.subheader("📊 Function Graph")
-        # --- Plotting Logic ---
         x_plot = np.linspace(lower_bound - 1, upper_bound + 1, 500)
         f_num = sp.lambdify(x, f_expr, modules=['numpy', 'cmath'])
         
@@ -98,7 +101,6 @@ try:
         for val in x_plot:
             try:
                 res = f_num(val)
-                # Filter out imaginary numbers (where the function doesn't exist on the real plane)
                 if isinstance(res, complex):
                     y_plot.append(res.real if abs(res.imag) < 1e-6 else np.nan)
                 else:
@@ -106,7 +108,6 @@ try:
             except:
                 y_plot.append(np.nan)
 
-        # Generate Area Shading
         x_fill = np.linspace(lower_bound, upper_bound, 300)
         y_fill = []
         for val in x_fill:
@@ -116,10 +117,8 @@ try:
             except:
                 y_fill.append(0)
 
-        # Build the Plotly Graph
         fig = go.Figure()
 
-        # Add shaded area
         fig.add_trace(go.Scatter(
             x=x_fill, y=y_fill,
             fill='tozeroy',
@@ -129,7 +128,6 @@ try:
             hoverinfo='skip'
         ))
 
-        # Add main function line
         fig.add_trace(go.Scatter(
             x=x_plot, y=y_plot, 
             mode='lines', 
@@ -147,6 +145,5 @@ try:
         st.plotly_chart(fig, use_container_width=True)
 
 except Exception as e:
-    # This will now print the EXACT error instead of a generic message
     st.error(f"Computation Error: {e}")
     st.info("Ensure you are using standard math notation (e.g., `x**2` or `sin(x)`).")
