@@ -1,18 +1,62 @@
 import streamlit as st
+import sympy as sp
+import numpy as np
+import plotly.graph_objects as go
 import subprocess
 import os
-import sympy as sp
 
-# --- Page Config ---
-st.set_page_config(page_title="LaTeX Integral Master", page_icon="∫", layout="wide")
+st.set_page_config(page_title="Dynamic Integral Master", layout="wide")
+st.title("∫ Dynamic Integral & LaTeX Generator")
 
-st.title("∫ Rigorous Integral Calculator")
-st.markdown("Generates mathematically rigorous, simplified step-by-step solutions compiled in LaTeX.")
+# --- Sidebar Inputs ---
+st.sidebar.header("📥 Input Parameters")
+func_str = st.sidebar.text_input("Enter f(x):", value="sqrt(x**2 - 1)")
+lower_bound = st.sidebar.number_input("Lower Bound (a)", value=1.0, step=0.5)
+upper_bound = st.sidebar.number_input("Upper Bound (b)", value=5.0, step=0.5)
 
-# --- LaTeX Template ---
-def generate_latex_content():
-    # This is the proper, simplified step-by-step solution for sqrt(x^2 - 1)
-    return r"""\documentclass{article}
+try:
+    # 1. Parse and Compute
+    x = sp.symbols('x')
+    clean_expr = func_str.replace('^', '**')
+    f_expr = sp.parse_expr(clean_expr, transformations='all')
+
+    # 2. Integrate and SIMPLIFY (This fixes the messy unsimplified outputs!)
+    raw_indefinite = sp.integrate(f_expr, x)
+    F_expr = sp.simplify(raw_indefinite) # Force algebraic simplification
+    
+    definite_integral_raw = sp.integrate(f_expr, (x, lower_bound, upper_bound))
+    numerical_value = float(sp.re(definite_integral_raw.evalf()))
+
+    # Evaluate bounds on the simplified function
+    F_b = F_expr.subs(x, upper_bound).evalf()
+    F_a = F_expr.subs(x, lower_bound).evalf()
+
+    # --- UI Display ---
+    col1, col2 = st.columns([2, 1])
+
+    with col2:
+        st.subheader("📝 Calculus Steps")
+        st.latex(rf"f(x) = {sp.latex(f_expr)}")
+        
+        with st.expander("Show Simplified Antiderivative F(x)"):
+            st.latex(sp.latex(F_expr))
+            
+        st.write("**Fundamental Theorem (FTC):**")
+        st.latex(rf"F({upper_bound}) = {float(sp.re(F_b)):.4f}")
+        st.latex(rf"F({lower_bound}) = {float(sp.re(F_a)):.4f}")
+        st.success(f"**Result:** {numerical_value:.5f}")
+
+        # --- Dynamic LaTeX Generation ---
+        if st.button("⚙️ Compile PDF Report"):
+            with st.spinner("Writing and compiling LaTeX..."):
+                # Safely format SymPy outputs to LaTeX strings
+                latex_f = sp.latex(f_expr)
+                latex_F = sp.latex(F_expr)
+                latex_Fb = sp.latex(F_b)
+                latex_Fa = sp.latex(F_a)
+                
+                # Construct the raw LaTeX document
+                tex_content = r"""\documentclass{article}
 \usepackage{amsmath}
 \usepackage{geometry}
 \geometry{margin=1in}
@@ -20,93 +64,83 @@ def generate_latex_content():
 \begin{document}
 
 \begin{center}
-    \Large \textbf{Step-by-Step Integral Evaluation}
+    \Large \textbf{Integral Evaluation Report}
 \end{center}
 
 \vspace{0.5cm}
-\textbf{Evaluate the integral:}
-$$ I = \int \sqrt{x^2 - 1} \, dx $$
+\textbf{1. The Definite Integral Setup:}
+\[ I = \int_{""" + str(lower_bound) + r"""}^{""" + str(upper_bound) + r"""} """ + latex_f + r""" \, dx \]
 
-\textbf{Solution:}
+\textbf{2. Finding the Antiderivative $F(x)$:}
+Using symbolic integration and algebraic simplification:
+\[ F(x) = \int """ + latex_f + r""" \, dx = """ + latex_F + r""" + C \]
 
-\textbf{Step 1: Trigonometric Substitution} \\
-Let $x = \sec(\theta)$, which means $dx = \sec(\theta)\tan(\theta) \, d\theta$. \\
-Substitute these into the integral:
-$$ I = \int \sqrt{\sec^2(\theta) - 1} \cdot \sec(\theta)\tan(\theta) \, d\theta $$
+\textbf{3. Applying the Fundamental Theorem of Calculus:}
+\[ \int_{""" + str(lower_bound) + r"""}^{""" + str(upper_bound) + r"""} f(x) \, dx = F(""" + str(upper_bound) + r""") - F(""" + str(lower_bound) + r""") \]
 
-\textbf{Step 2: Simplify using Pythagorean Identity} \\
-Since $\sec^2(\theta) - 1 = \tan^2(\theta)$, the integral becomes:
-$$ I = \int \sqrt{\tan^2(\theta)} \cdot \sec(\theta)\tan(\theta) \, d\theta $$
-$$ I = \int \tan^2(\theta)\sec(\theta) \, d\theta $$
+Evaluating at the upper bound $x = """ + str(upper_bound) + r"""$:
+\[ F(""" + str(upper_bound) + r""") = """ + latex_Fb + r""" \]
 
-\textbf{Step 3: Integration by Parts} \\
-We can rewrite the integral using $\tan^2(\theta) = \sec^2(\theta) - 1$:
-$$ I = \int (\sec^3(\theta) - \sec(\theta)) \, d\theta $$
-Using the standard reduction formulas for secant:
-$$ \int \sec^3(\theta) \, d\theta = \frac{1}{2}\sec(\theta)\tan(\theta) + \frac{1}{2}\ln|\sec(\theta) + \tan(\theta)| $$
-$$ \int \sec(\theta) \, d\theta = \ln|\sec(\theta) + \tan(\theta)| $$
+Evaluating at the lower bound $x = """ + str(lower_bound) + r"""$:
+\[ F(""" + str(lower_bound) + r""") = """ + latex_Fa + r""" \]
 
-Subtracting the two yields:
-$$ I = \frac{1}{2}\sec(\theta)\tan(\theta) - \frac{1}{2}\ln|\sec(\theta) + \tan(\theta)| + C $$
-
-\textbf{Step 4: Algebraic Back-Substitution} \\
-Using our reference right triangle where $\sec(\theta) = x$, we know:
-\begin{itemize}
-    \item Hypotenuse = $x$
-    \item Adjacent = $1$
-    \item Opposite = $\sqrt{x^2 - 1}$
-\end{itemize}
-Therefore, $\tan(\theta) = \frac{\text{Opposite}}{\text{Adjacent}} = \sqrt{x^2 - 1}$.
-
-Substitute these algebraic terms back into the evaluated integral:
-$$ I = \frac{1}{2}(x)(\sqrt{x^2 - 1}) - \frac{1}{2}\ln|x + \sqrt{x^2 - 1}| + C $$
-
-\textbf{Final Answer:}
-$$ \int \sqrt{x^2 - 1} \, dx = \frac{x\sqrt{x^2 - 1}}{2} - \frac{1}{2}\ln|x + \sqrt{x^2 - 1}| + C, \quad C \in \mathbb{R} $$
+\textbf{4. Final Result:}
+\[ I = """ + f"{numerical_value:.5f}" + r""" \]
 
 \end{document}
 """
-
-# --- App UI ---
-st.subheader("Evaluate: $\int \sqrt{x^2 - 1} \, dx$")
-
-if st.button("⚙️ Generate LaTeX Solution PDF"):
-    with st.spinner("Compiling LaTeX document..."):
-        tex_content = generate_latex_content()
-        
-        # Write to a temporary .tex file
-        with open("solution.tex", "w") as f:
-            f.write(tex_content)
-            
-        # Compile via command line pdflatex
-        try:
-            subprocess.run(["pdflatex", "-interaction=nonstopmode", "solution.tex"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            
-            # Read the generated PDF
-            with open("solution.pdf", "rb") as f:
-                pdf_data = f.read()
+                # Save the .tex file
+                with open("solution.tex", "w", encoding="utf-8") as f:
+                    f.write(tex_content)
                 
-            st.success("PDF compiled successfully!")
-            st.download_button(
-                label="📥 Download Mathematically Rigorous PDF",
-                data=pdf_data,
-                file_name="simplified_solution.pdf",
-                mime="application/pdf"
-            )
-            
-        except FileNotFoundError:
-            st.error("LaTeX compiler (`pdflatex`) not found on this system.")
-            st.info("If running locally, ensure MiKTeX or TeX Live is installed. If on Streamlit Cloud, add `texlive-latex-base` to a `packages.txt` file in your repo.")
-            
-            # Fallback: Let them download the raw .tex file
-            st.download_button(
-                label="📥 Download raw .tex file instead",
-                data=tex_content,
-                file_name="solution.tex",
-                mime="text/plain"
-            )
-        except Exception as e:
-            st.error(f"Compilation Error: {e}")
+                # Run pdflatex and capture errors
+                try:
+                    result = subprocess.run(
+                        ["pdflatex", "-interaction=nonstopmode", "solution.tex"], 
+                        stdout=subprocess.PIPE, 
+                        stderr=subprocess.PIPE, 
+                        text=True,
+                        check=True
+                    )
+                    
+                    with open("solution.pdf", "rb") as f:
+                        pdf_data = f.read()
+                        
+                    st.success("PDF compiled successfully!")
+                    st.download_button("📥 Download LaTeX PDF", data=pdf_data, file_name="integral_report.pdf", mime="application/pdf")
+                    
+                except subprocess.CalledProcessError as e:
+                    st.error("LaTeX Compilation Failed (exit status 1).")
+                    with st.expander("View LaTeX Error Log"):
+                        # This will show you exactly what caused pdflatex to crash!
+                        st.code(e.stdout, language="text")
+                    
+                    st.download_button("📥 Download Raw .tex File Instead", data=tex_content, file_name="solution.tex", mime="text/plain")
+
+    # --- Plotting ---
+    with col1:
+        st.subheader("📊 Function Graph")
+        x_plot = np.linspace(lower_bound - 1, upper_bound + 1, 400)
+        f_num = sp.lambdify(x, f_expr, modules=['numpy', 'cmath'])
+        
+        y_plot = []
+        for val in x_plot:
+            try:
+                res = f_num(val)
+                if isinstance(res, complex):
+                    y_plot.append(res.real if abs(res.imag) < 1e-6 else np.nan)
+                else:
+                    y_plot.append(float(res))
+            except:
+                y_plot.append(np.nan)
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=x_plot, y=y_plot, mode='lines', name='f(x)', line=dict(color='#007BFF', width=3)))
+        fig.update_layout(title="Area Visualization", template="plotly_white", hovermode="x unified")
+        st.plotly_chart(fig, use_container_width=True)
+
+except Exception as e:
+    st.error(f"Error: {e}")
 
 # Cleanup temp files
 for file in ["solution.tex", "solution.aux", "solution.log"]:
