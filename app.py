@@ -3,7 +3,6 @@ import sympy as sp
 import numpy as np
 import plotly.graph_objects as go
 from fpdf import FPDF
-import textwrap
 
 # --- Page Config ---
 st.set_page_config(page_title="Integral Master Pro", page_icon="∫", layout="wide")
@@ -14,40 +13,51 @@ def create_pdf(func_str, lower, upper, indefinite, f_b, f_a, result):
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
     
-    pdf.cell(0, 10, txt="Integral Calculation Report", new_x="LMARGIN", new_y="NEXT", align='C')
+    # Header
+    pdf.cell(0, 10, txt="Integral Calculation Report", ln=1, align='C')
+    pdf.ln(5)
     
     pdf.set_font("Arial", size=12)
-    pdf.cell(0, 10, txt="", new_x="LMARGIN", new_y="NEXT") 
-    pdf.cell(0, 10, txt=f"Function: f(x) = {func_str}", new_x="LMARGIN", new_y="NEXT")
-    pdf.cell(0, 10, txt=f"Bounds: From {lower} to {upper}", new_x="LMARGIN", new_y="NEXT")
     
-    pdf.cell(0, 10, txt="", new_x="LMARGIN", new_y="NEXT")
+    # 🛠️ THE FIX: A custom function that forces text to break every 70 characters 
+    # without relying on fpdf's buggy multi_cell word-wrapper.
+    def write_safe_text(prefix, content):
+        full_text = f"{prefix}{content}"
+        # Slice the string into exact 70-character chunks
+        chunks = [full_text[i:i+70] for i in range(0, len(full_text), 70)]
+        for chunk in chunks:
+            pdf.cell(0, 8, txt=chunk, ln=1)
+
+    # Output basic info safely
+    write_safe_text("Function: f(x) = ", func_str)
+    write_safe_text("Bounds: ", f"From {lower} to {upper}")
+    pdf.ln(5)
+    
     pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, txt="Step-by-Step Solution:", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(0, 10, txt="Step-by-Step Solution:", ln=1)
     
     pdf.set_font("Arial", size=12)
+    pdf.cell(0, 8, txt="1. Find the anti-derivative F(x):", ln=1)
     
-    # BULLETPROOF FIX: Force line breaks on long math strings using textwrap
+    # Output the massive math string safely
     indef_str = str(indefinite).replace('**', '^')
-    wrapper = textwrap.TextWrapper(width=65, break_long_words=True)
-    safe_indef_str = wrapper.fill(indef_str)
+    write_safe_text("   F(x) = ", indef_str)
     
-    pdf.multi_cell(0, 10, txt="1. Find the anti-derivative F(x):")
-    
-    # Print the wrapped math string line by line
-    for line in safe_indef_str.split('\n'):
-        pdf.multi_cell(0, 10, txt=f"    F(x) = {line}")
-        
-    pdf.multi_cell(0, 10, txt="2. Apply Fundamental Theorem of Calculus: F(b) - F(a)")
+    pdf.ln(3)
+    pdf.cell(0, 8, txt="2. Apply Fundamental Theorem of Calculus: F(b) - F(a)", ln=1)
     
     fb_val = float(sp.re(f_b))
     fa_val = float(sp.re(f_a))
     
-    pdf.multi_cell(0, 10, txt=f"    F({upper}) = {fb_val:.4f}")
-    pdf.multi_cell(0, 10, txt=f"    F({lower}) = {fa_val:.4f}")
-    pdf.multi_cell(0, 10, txt=f"3. Final Result: {fb_val:.4f} - ({fa_val:.4f}) = {result:.5f}")
+    pdf.cell(0, 8, txt=f"   F({upper}) = {fb_val:.4f}", ln=1)
+    pdf.cell(0, 8, txt=f"   F({lower}) = {fa_val:.4f}", ln=1)
     
+    pdf.ln(3)
+    pdf.cell(0, 8, txt=f"3. Final Result: {fb_val:.4f} - ({fa_val:.4f}) = {result:.5f}", ln=1)
+    
+    # Output raw bytes
     return bytes(pdf.output())
+
 
 # --- Main App ---
 st.title("∫ Integral Master with Graph & PDF")
@@ -81,7 +91,6 @@ try:
         st.subheader("📝 Step-by-Step")
         st.latex(rf"F(x) = \int {sp.latex(f_expr)} dx")
         
-        # Display the indefinite integral safely in the UI expander since it can be long
         with st.expander("Show Anti-derivative F(x)"):
             st.latex(sp.latex(indefinite_integral))
         
@@ -90,7 +99,7 @@ try:
         st.latex(rf"F({lower_bound}) = {float(sp.re(f_a)):.4f}")
         st.success(f"**Final Result:** {numerical_value:.5f}")
 
-        # PDF Download
+        # PDF Download Button
         try:
             pdf_data = create_pdf(func_str, lower_bound, upper_bound, indefinite_integral, f_b, f_a, numerical_value)
             st.download_button(
@@ -156,4 +165,4 @@ try:
 
 except Exception as e:
     st.error(f"Computation Error: {e}")
-    st.info("Ensure you are using standard math notation (e.g., `x**2` or `sin(x)`).")
+    st.info("Ensure you are using standard math notation.")
