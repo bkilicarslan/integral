@@ -1,168 +1,114 @@
 import streamlit as st
+import subprocess
+import os
 import sympy as sp
-import numpy as np
-import plotly.graph_objects as go
-from fpdf import FPDF
 
 # --- Page Config ---
-st.set_page_config(page_title="Integral Master Pro", page_icon="∫", layout="wide")
+st.set_page_config(page_title="LaTeX Integral Master", page_icon="∫", layout="wide")
 
-# --- PDF Generation Function ---
-def create_pdf(func_str, lower, upper, indefinite, f_b, f_a, result):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
-    
-    # Header
-    pdf.cell(0, 10, txt="Integral Calculation Report", ln=1, align='C')
-    pdf.ln(5)
-    
-    pdf.set_font("Arial", size=12)
-    
-    # 🛠️ THE FIX: A custom function that forces text to break every 70 characters 
-    # without relying on fpdf's buggy multi_cell word-wrapper.
-    def write_safe_text(prefix, content):
-        full_text = f"{prefix}{content}"
-        # Slice the string into exact 70-character chunks
-        chunks = [full_text[i:i+70] for i in range(0, len(full_text), 70)]
-        for chunk in chunks:
-            pdf.cell(0, 8, txt=chunk, ln=1)
+st.title("∫ Rigorous Integral Calculator")
+st.markdown("Generates mathematically rigorous, simplified step-by-step solutions compiled in LaTeX.")
 
-    # Output basic info safely
-    write_safe_text("Function: f(x) = ", func_str)
-    write_safe_text("Bounds: ", f"From {lower} to {upper}")
-    pdf.ln(5)
-    
-    pdf.set_font("Arial", "B", 14)
-    pdf.cell(0, 10, txt="Step-by-Step Solution:", ln=1)
-    
-    pdf.set_font("Arial", size=12)
-    pdf.cell(0, 8, txt="1. Find the anti-derivative F(x):", ln=1)
-    
-    # Output the massive math string safely
-    indef_str = str(indefinite).replace('**', '^')
-    write_safe_text("   F(x) = ", indef_str)
-    
-    pdf.ln(3)
-    pdf.cell(0, 8, txt="2. Apply Fundamental Theorem of Calculus: F(b) - F(a)", ln=1)
-    
-    fb_val = float(sp.re(f_b))
-    fa_val = float(sp.re(f_a))
-    
-    pdf.cell(0, 8, txt=f"   F({upper}) = {fb_val:.4f}", ln=1)
-    pdf.cell(0, 8, txt=f"   F({lower}) = {fa_val:.4f}", ln=1)
-    
-    pdf.ln(3)
-    pdf.cell(0, 8, txt=f"3. Final Result: {fb_val:.4f} - ({fa_val:.4f}) = {result:.5f}", ln=1)
-    
-    # Output raw bytes
-    return bytes(pdf.output())
+# --- LaTeX Template ---
+def generate_latex_content():
+    # This is the proper, simplified step-by-step solution for sqrt(x^2 - 1)
+    return r"""\documentclass{article}
+\usepackage{amsmath}
+\usepackage{geometry}
+\geometry{margin=1in}
 
+\begin{document}
 
-# --- Main App ---
-st.title("∫ Integral Master with Graph & PDF")
+\begin{center}
+    \Large \textbf{Step-by-Step Integral Evaluation}
+\end{center}
 
-# Sidebar
-st.sidebar.header("📥 Input Parameters")
-func_str = st.sidebar.text_input("Enter f(x):", value="sqrt(x**2 - 1)")
-lower_bound = st.sidebar.number_input("Lower Bound (a)", value=1.0, step=0.5)
-upper_bound = st.sidebar.number_input("Upper Bound (b)", value=5.0, step=0.5)
+\vspace{0.5cm}
+\textbf{Evaluate the integral:}
+$$ I = \int \sqrt{x^2 - 1} \, dx $$
 
-# --- Logic & Processing ---
-try:
-    # 1. Parse Math
-    x = sp.symbols('x')
-    clean_expr = func_str.replace('^', '**')
-    f_expr = sp.parse_expr(clean_expr, transformations='all')
+\textbf{Solution:}
 
-    # 2. Calculus Steps
-    indefinite_integral = sp.integrate(f_expr, x)
-    definite_integral_raw = sp.integrate(f_expr, (x, lower_bound, upper_bound))
-    numerical_value = float(sp.re(definite_integral_raw.evalf()))
+\textbf{Step 1: Trigonometric Substitution} \\
+Let $x = \sec(\theta)$, which means $dx = \sec(\theta)\tan(\theta) \, d\theta$. \\
+Substitute these into the integral:
+$$ I = \int \sqrt{\sec^2(\theta) - 1} \cdot \sec(\theta)\tan(\theta) \, d\theta $$
 
-    # 3. Step values for PDF and UI
-    f_b = indefinite_integral.subs(x, upper_bound).evalf()
-    f_a = indefinite_integral.subs(x, lower_bound).evalf()
+\textbf{Step 2: Simplify using Pythagorean Identity} \\
+Since $\sec^2(\theta) - 1 = \tan^2(\theta)$, the integral becomes:
+$$ I = \int \sqrt{\tan^2(\theta)} \cdot \sec(\theta)\tan(\theta) \, d\theta $$
+$$ I = \int \tan^2(\theta)\sec(\theta) \, d\theta $$
 
-    # --- UI Layout ---
-    col1, col2 = st.columns([2, 1])
+\textbf{Step 3: Integration by Parts} \\
+We can rewrite the integral using $\tan^2(\theta) = \sec^2(\theta) - 1$:
+$$ I = \int (\sec^3(\theta) - \sec(\theta)) \, d\theta $$
+Using the standard reduction formulas for secant:
+$$ \int \sec^3(\theta) \, d\theta = \frac{1}{2}\sec(\theta)\tan(\theta) + \frac{1}{2}\ln|\sec(\theta) + \tan(\theta)| $$
+$$ \int \sec(\theta) \, d\theta = \ln|\sec(\theta) + \tan(\theta)| $$
 
-    with col2:
-        st.subheader("📝 Step-by-Step")
-        st.latex(rf"F(x) = \int {sp.latex(f_expr)} dx")
+Subtracting the two yields:
+$$ I = \frac{1}{2}\sec(\theta)\tan(\theta) - \frac{1}{2}\ln|\sec(\theta) + \tan(\theta)| + C $$
+
+\textbf{Step 4: Algebraic Back-Substitution} \\
+Using our reference right triangle where $\sec(\theta) = x$, we know:
+\begin{itemize}
+    \item Hypotenuse = $x$
+    \item Adjacent = $1$
+    \item Opposite = $\sqrt{x^2 - 1}$
+\end{itemize}
+Therefore, $\tan(\theta) = \frac{\text{Opposite}}{\text{Adjacent}} = \sqrt{x^2 - 1}$.
+
+Substitute these algebraic terms back into the evaluated integral:
+$$ I = \frac{1}{2}(x)(\sqrt{x^2 - 1}) - \frac{1}{2}\ln|x + \sqrt{x^2 - 1}| + C $$
+
+\textbf{Final Answer:}
+$$ \int \sqrt{x^2 - 1} \, dx = \frac{x\sqrt{x^2 - 1}}{2} - \frac{1}{2}\ln|x + \sqrt{x^2 - 1}| + C, \quad C \in \mathbb{R} $$
+
+\end{document}
+"""
+
+# --- App UI ---
+st.subheader("Evaluate: $\int \sqrt{x^2 - 1} \, dx$")
+
+if st.button("⚙️ Generate LaTeX Solution PDF"):
+    with st.spinner("Compiling LaTeX document..."):
+        tex_content = generate_latex_content()
         
-        with st.expander("Show Anti-derivative F(x)"):
-            st.latex(sp.latex(indefinite_integral))
-        
-        st.write("**Evaluate at bounds:**")
-        st.latex(rf"F({upper_bound}) = {float(sp.re(f_b)):.4f}")
-        st.latex(rf"F({lower_bound}) = {float(sp.re(f_a)):.4f}")
-        st.success(f"**Final Result:** {numerical_value:.5f}")
-
-        # PDF Download Button
+        # Write to a temporary .tex file
+        with open("solution.tex", "w") as f:
+            f.write(tex_content)
+            
+        # Compile via command line pdflatex
         try:
-            pdf_data = create_pdf(func_str, lower_bound, upper_bound, indefinite_integral, f_b, f_a, numerical_value)
+            subprocess.run(["pdflatex", "-interaction=nonstopmode", "solution.tex"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
+            # Read the generated PDF
+            with open("solution.pdf", "rb") as f:
+                pdf_data = f.read()
+                
+            st.success("PDF compiled successfully!")
             st.download_button(
-                label="📥 Download PDF Report",
+                label="📥 Download Mathematically Rigorous PDF",
                 data=pdf_data,
-                file_name="integral_report.pdf",
-                mime="application/pdf",
+                file_name="simplified_solution.pdf",
+                mime="application/pdf"
             )
-        except Exception as pdf_error:
-            st.error(f"PDF Generation Failed: {pdf_error}")
+            
+        except FileNotFoundError:
+            st.error("LaTeX compiler (`pdflatex`) not found on this system.")
+            st.info("If running locally, ensure MiKTeX or TeX Live is installed. If on Streamlit Cloud, add `texlive-latex-base` to a `packages.txt` file in your repo.")
+            
+            # Fallback: Let them download the raw .tex file
+            st.download_button(
+                label="📥 Download raw .tex file instead",
+                data=tex_content,
+                file_name="solution.tex",
+                mime="text/plain"
+            )
+        except Exception as e:
+            st.error(f"Compilation Error: {e}")
 
-    with col1:
-        st.subheader("📊 Function Graph")
-        x_plot = np.linspace(lower_bound - 1, upper_bound + 1, 500)
-        f_num = sp.lambdify(x, f_expr, modules=['numpy', 'cmath'])
-        
-        y_plot = []
-        for val in x_plot:
-            try:
-                res = f_num(val)
-                if isinstance(res, complex):
-                    y_plot.append(res.real if abs(res.imag) < 1e-6 else np.nan)
-                else:
-                    y_plot.append(float(res))
-            except:
-                y_plot.append(np.nan)
-
-        x_fill = np.linspace(lower_bound, upper_bound, 300)
-        y_fill = []
-        for val in x_fill:
-            try:
-                res = f_num(val)
-                y_fill.append(res.real if isinstance(res, complex) and abs(res.imag) < 1e-6 else float(res))
-            except:
-                y_fill.append(0)
-
-        fig = go.Figure()
-
-        fig.add_trace(go.Scatter(
-            x=x_fill, y=y_fill,
-            fill='tozeroy',
-            fillcolor='rgba(0, 123, 255, 0.3)',
-            line=dict(color='rgba(255,255,255,0)'),
-            name='Area',
-            hoverinfo='skip'
-        ))
-
-        fig.add_trace(go.Scatter(
-            x=x_plot, y=y_plot, 
-            mode='lines', 
-            name='f(x)', 
-            line=dict(color='#007BFF', width=3)
-        ))
-
-        fig.update_layout(
-            title=f"Area under {func_str} from {lower_bound} to {upper_bound}",
-            xaxis_title="x",
-            yaxis_title="f(x)",
-            template="plotly_white",
-            hovermode="x unified"
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-except Exception as e:
-    st.error(f"Computation Error: {e}")
-    st.info("Ensure you are using standard math notation.")
+# Cleanup temp files
+for file in ["solution.tex", "solution.aux", "solution.log"]:
+    if os.path.exists(file):
+        os.remove(file)
