@@ -9,14 +9,12 @@ st.set_page_config(page_title="Dynamic Integral Master", layout="wide")
 st.title("∫ Dynamic Step-by-Step Integral Calculator")
 
 # --- Step-by-Step Rule Parser ---
-# This function hacks into SymPy's manual integrator to extract human-like steps
 def generate_step_latex(expr, x_var):
     try:
         from sympy.integrals.manualintegrate import integral_steps
         rule_tree = integral_steps(expr, x_var)
         steps_latex = []
         
-        # Recursive function to walk through SymPy's rule tree
         def walk(rule):
             if rule is None: return
             r_name = rule.__class__.__name__
@@ -26,40 +24,40 @@ def generate_step_latex(expr, x_var):
                 for sub in rule.substeps: walk(sub)
             elif r_name == 'URule':
                 u_str = sp.latex(rule.u_func)
-                steps_latex.append(rf"\item \textbf{U-Substitution:} Let $u = {u_str}$. Substitute $u$ and $du$ into the integral.")
+                # FIX: Doubled curly braces for \textbf{{...}}
+                steps_latex.append(rf"\item \textbf{{U-Substitution:}} Let $u = {u_str}$. Substitute $u$ and $du$ into the integral.")
                 walk(rule.substep)
             elif r_name == 'PartsRule':
                 u_str = sp.latex(rule.u)
                 dv_str = sp.latex(rule.dv)
-                steps_latex.append(rf"\item \textbf{Integration by Parts:} Let $u = {u_str}$ and $dv = {dv_str} \, dx$. Apply the formula $\int u \, dv = uv - \int v \, du$.")
+                # FIX: Doubled curly braces for \textbf{{...}}
+                steps_latex.append(rf"\item \textbf{{Integration by Parts:}} Let $u = {u_str}$ and $dv = {dv_str} \, dx$. Apply the formula $\int u \, dv = uv - \int v \, du$.")
                 walk(rule.v_step)
                 walk(rule.second_step)
             elif r_name == 'ConstantTimesRule':
                 c_str = sp.latex(rule.constant)
-                steps_latex.append(rf"\item \textbf{Constant Multiple:} Factor out the constant ${c_str}$ from the integral.")
+                # FIX: Doubled curly braces for \textbf{{...}}
+                steps_latex.append(rf"\item \textbf{{Constant Multiple:}} Factor out the constant ${c_str}$ from the integral.")
                 walk(rule.substep)
             elif r_name == 'PowerRule':
                 steps_latex.append(r"\item \textbf{Power Rule:} Apply the power rule for integration: $\int x^n \, dx = \frac{x^{n+1}}{n+1}$.")
             elif r_name == 'TrigRule':
                 steps_latex.append(r"\item \textbf{Trigonometric Identity:} Evaluate using standard trigonometric integral formulas.")
             elif r_name == 'TrigSubstitutionRule':
-                theta = sp.latex(rule.theta)
                 func = sp.latex(rule.func)
-                steps_latex.append(rf"\item \textbf{Trig Substitution:} Use a trigonometric substitution (e.g., $x = f(\theta)$) to eliminate the radical.")
+                # FIX: Doubled curly braces for \textbf{{...}}
+                steps_latex.append(rf"\item \textbf{{Trig Substitution:}} Let $x = {func}$. Substitute to eliminate the radical.")
                 walk(rule.substep)
             elif r_name == 'AlternativeRule':
-                # SymPy tries multiple paths; we only want the one that worked
                 if hasattr(rule, 'alternatives') and rule.alternatives:
                     walk(rule.alternatives[0])
             else:
-                # Catch-all for basic rules
                 clean_name = r_name.replace('Rule', '')
                 steps_latex.append(rf"\item \textbf{{{clean_name} Applied:}} Evaluate the resulting expression.")
                 if hasattr(rule, 'substep'): walk(rule.substep)
 
         walk(rule_tree)
         
-        # Remove duplicate steps if the tree nested too deeply
         clean_steps = []
         for s in steps_latex:
             if not clean_steps or clean_steps[-1] != s:
@@ -114,7 +112,6 @@ try:
         if st.button("⚙️ Compile PDF Report"):
             with st.spinner("Analyzing steps and compiling LaTeX..."):
                 
-                # Extract the dynamic steps
                 dynamic_steps_latex = generate_step_latex(f_expr, x)
                 
                 latex_f = sp.latex(f_expr)
@@ -122,7 +119,6 @@ try:
                 latex_Fb = sp.latex(F_b)
                 latex_Fa = sp.latex(F_a)
                 
-                # Construct the LaTeX document with the new steps section
                 tex_content = r"""\documentclass{article}
 \usepackage{amsmath}
 \usepackage{geometry}
@@ -148,7 +144,7 @@ After applying the steps and simplifying algebraically:
 \[ F(x) = """ + latex_F + r""" + C \]
 
 \textbf{4. Applying the Fundamental Theorem of Calculus:}
-\[ \int_{a}^{b} f(x) \, dx = F(b) - F(a) \]
+\[ \int_{""" + str(lower_bound) + r"""}^{""" + str(upper_bound) + r"""} f(x) \, dx = F(""" + str(upper_bound) + r""") - F(""" + str(lower_bound) + r""") \]
 
 Evaluating at the upper bound $x = """ + str(upper_bound) + r"""$:
 \[ F(""" + str(upper_bound) + r""") = """ + latex_Fb + r""" \]
